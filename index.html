@@ -1,0 +1,593 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10251e">
+<title>Gestão de Recarga EV</title>
+<style>
+:root {
+  --bg:#f1f5f2; --card:#fff; --green:#137c53;
+  --dark:#10251e; --muted:#64746c; --line:#dce6df;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--dark);
+  font-family:Arial,sans-serif
+}
+header{
+  background:var(--dark);color:white;padding:25px 18px;
+  border-radius:0 0 22px 22px
+}
+header h1{font-size:24px;margin:0 0 8px}
+header p{margin:0;color:#c9ded2;font-size:14px}
+main{max-width:760px;margin:auto;padding:16px}
+.card{
+  background:var(--card);padding:18px;margin-bottom:15px;
+  border:1px solid var(--line);border-radius:16px
+}
+h2{font-size:18px;margin:0 0 16px}
+label{display:block;font-size:13px;font-weight:bold;margin-bottom:6px}
+input{
+  display:block;width:100%;padding:12px;margin-bottom:14px;
+  border:1px solid #cbd8cf;border-radius:9px;
+  background:white;font-size:16px;color:var(--dark)
+}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+button{
+  border:0;border-radius:10px;padding:13px 14px;
+  font-size:14px;font-weight:bold;cursor:pointer
+}
+.primary{background:var(--green);color:white;width:100%}
+.secondary{background:#e5f2e9;color:#155c40}
+.danger{background:#ffeded;color:#a22}
+.stats{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  margin-bottom:15px
+}
+.stat{background:white;padding:15px;border-radius:14px;
+  border:1px solid var(--line);min-width:0}
+.stat.wide{grid-column:1 / -1}
+.stat small{color:var(--muted);font-size:12px}
+.stat strong{display:block;font-size:21px;margin-top:8px;
+  overflow-wrap:anywhere}
+.note{font-size:12px;color:var(--muted);line-height:1.5}
+.item{border-top:1px solid var(--line);padding:14px 0}
+.item:first-child{border-top:0}
+.itemtop{display:flex;justify-content:space-between;gap:8px}
+.item h3{font-size:15px;margin:0 0 7px}
+.item p{font-size:13px;color:var(--muted);margin:5px 0}
+.actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.actions button{padding:9px 12px}
+.empty{text-align:center;color:var(--muted);padding:20px 0}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:8px 0 25px}
+@media(max-width:420px){
+  .grid{grid-template-columns:1fr}
+  .stat strong{font-size:19px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ Gestão de Recarga EV</h1>
+  <p>Controle de energia, bateria e custo do seu carro elétrico.</p>
+</header>
+
+<main>
+  <section class="stats">
+    <div class="stat">
+      <small>Energia consumida</small>
+      <strong id="totalKwh">0,000 kWh</strong>
+    </div>
+    <div class="stat">
+      <small>Custo acumulado</small>
+      <strong id="totalCost">R$ 0,00</strong>
+    </div>
+    <div class="stat">
+      <small>Leituras registradas</small>
+      <strong id="totalSessions">0</strong>
+    </div>
+    <div class="stat">
+      <small>Última bateria</small>
+      <strong id="lastBattery">--%</strong>
+    </div>
+    <div class="stat wide">
+      <small>Capacidade estimada da bateria (média)</small>
+      <strong id="batteryCapacity">-- kWh</strong>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>⚙️ Configurações</h2>
+    <label for="tariff">Preço da energia (R$/kWh)</label>
+    <input id="tariff" type="number" min="0" step="0.001"
+      value="0.85">
+    <p class="note">
+      Informe o preço total do kWh da sua conta de energia.
+      O valor pode ser alterado quando a tarifa mudar.
+    </p>
+
+    <label for="initialMeter">Leitura inicial do medidor (kWh) — opcional</label>
+    <input id="initialMeter" type="number" min="0" step="0.001"
+      placeholder="Ex.: 1200.000">
+    <p class="note">
+      Se informada, o primeiro carregamento também terá consumo
+      medido. Deixe em branco para usar a primeira leitura
+      registrada como referência.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2 id="formTitle">➕ Registrar carregamento</h2>
+    <form id="chargeForm">
+      <input id="editId" type="hidden">
+
+      <label for="date">Data e hora do carregamento</label>
+      <input id="date" type="datetime-local" required>
+
+      <div class="grid">
+        <div>
+          <label for="batteryBefore">Bateria inicial (%)</label>
+          <input id="batteryBefore" type="number" min="0"
+            max="100" step="1" placeholder="Ex.: 20" required>
+        </div>
+        <div>
+          <label for="batteryAfter">Bateria final (%)</label>
+          <input id="batteryAfter" type="number" min="0"
+            max="100" step="1" placeholder="Ex.: 100" required>
+        </div>
+      </div>
+
+      <label for="meter">Leitura atual do medidor (kWh)</label>
+      <input id="meter" type="number" min="0" step="0.001"
+        placeholder="Ex.: 1250.450" required>
+
+      <p class="note">
+        Digite o valor acumulado que aparece no medidor, não
+        apenas o consumo desta recarga. O app compara com a
+        última leitura válida para calcular os kWh utilizados.
+      </p>
+
+      <button class="primary" type="submit" id="saveButton">
+        Salvar carregamento
+      </button>
+      <button class="secondary" type="button" id="cancelEdit"
+        style="display:none;width:100%;margin-top:8px">
+        Cancelar edição
+      </button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>📊 Histórico de carregamentos</h2>
+    <p class="note">
+      O consumo de cada leitura é calculado pela diferença em
+      relação à última leitura válida. Se você informar uma
+      leitura inicial nas configurações, o primeiro carregamento
+      também terá consumo medido. Registre as leituras do mesmo
+      medidor e em ordem cronológica.
+    </p>
+    <div id="history"></div>
+    <button class="secondary" id="exportBtn"
+      style="width:100%;margin-top:12px">
+      Exportar histórico CSV
+    </button>
+  </section>
+
+  <section class="card">
+    <h2>💾 Segurança dos dados</h2>
+    <p class="note">
+      Os registros ficam salvos neste navegador e dispositivo.
+      Limpar os dados do navegador pode apagá-los. Exporte o
+      histórico periodicamente para guardar uma cópia.
+    </p>
+    <button class="danger" id="clearBtn" style="width:100%">
+      Apagar todo o histórico
+    </button>
+  </section>
+
+  <footer>Gestão de Recarga EV • Controle pessoal de energia</footer>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const STORAGE = 'gestaoRecargaEV_v1';
+const TARIFF_KEY = 'gestaoRecargaTarifa';
+const INITIAL_METER_KEY = 'gestaoRecargaEV_initialMeter';
+
+let records = [];
+let tariff = 0.85;
+let initialMeter = null;
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE);
+    const parsed = raw ? JSON.parse(raw) : [];
+    records = Array.isArray(parsed)
+      ? parsed.filter(r => r && typeof r === 'object' && r.id)
+      : [];
+  } catch (e) {
+    records = [];
+  }
+  try {
+    const t = Number(localStorage.getItem(TARIFF_KEY));
+    if (Number.isFinite(t) && t >= 0) tariff = t;
+    else tariff = 0.85;
+  } catch (e) {
+    tariff = 0.85;
+  }
+  try {
+    const m = localStorage.getItem(INITIAL_METER_KEY);
+    if (m !== null && m !== '') {
+      const n = Number(m);
+      initialMeter = (Number.isFinite(n) && n >= 0) ? n : null;
+    } else {
+      initialMeter = null;
+    }
+  } catch (e) {
+    initialMeter = null;
+  }
+}
+
+function persist() {
+  try {
+    localStorage.setItem(STORAGE, JSON.stringify(records));
+    localStorage.setItem(TARIFF_KEY, String(tariff));
+    if (initialMeter === null) {
+      localStorage.removeItem(INITIAL_METER_KEY);
+    } else {
+      localStorage.setItem(INITIAL_METER_KEY, String(initialMeter));
+    }
+  } catch (e) {
+    alert('Não foi possível salvar. O armazenamento pode estar ' +
+      'cheio ou bloqueado. Exporte o histórico como cópia.');
+  }
+}
+
+function money(v) {
+  return Number(v).toLocaleString('pt-BR',{
+    style:'currency',currency:'BRL'
+  });
+}
+function num(v, digits=2) {
+  return Number(v).toLocaleString('pt-BR',{
+    minimumFractionDigits:digits,maximumFractionDigits:digits
+  });
+}
+function dateLabel(value) {
+  const d = new Date(value);
+  return isNaN(d) ? value : d.toLocaleString('pt-BR');
+}
+function ordered() {
+  return [...records].sort((a,b) =>
+    String(a.date || '').localeCompare(String(b.date || '')) ||
+    String(a.id  || '').localeCompare(String(b.id  || ''))
+  );
+}
+
+// Calcula o consumo usando a ÚLTIMA LEITURA VÁLIDA como base.
+// Registros com leitura decrescente são marcados como erro
+// e não avançam a base, evitando contaminação dos totais.
+function calculations() {
+  const list = ordered();
+  let base = initialMeter;
+  let baseIdx = initialMeter !== null ? -1 : null;
+
+  return list.map((r, i) => {
+    const meter = Number(r.meter);
+    const reference = base;
+    let kwh = null;
+    let error = false;
+    let contiguous = false;
+
+    if (!Number.isFinite(meter)) {
+      error = true;
+    } else if (reference === null) {
+      base = meter;
+      baseIdx = i;
+    } else {
+      const delta = meter - reference;
+      if (delta >= 0) {
+        kwh = delta;
+        contiguous = (baseIdx === i - 1);
+        base = meter;
+        baseIdx = i;
+      } else {
+        error = true;
+      }
+    }
+
+    return {
+      ...r,
+      previousMeter: reference,
+      kwh,
+      error,
+      contiguous
+    };
+  });
+}
+
+function render() {
+  const list = calculations();
+  const valid = list.filter(r => r.kwh !== null && !r.error);
+  const total = valid.reduce((s,r)=>s+r.kwh,0);
+  const cost = total * tariff;
+
+  $('totalKwh').textContent = num(total, 3)+' kWh';
+  $('totalCost').textContent = money(cost);
+  $('totalSessions').textContent = records.length;
+  $('lastBattery').textContent = list.length
+    ? list[list.length-1].batteryAfter+'%' : '--%';
+
+  // Capacidade estimada: só entre leituras contíguas (sem
+  // erros no meio), para que kWh e Δ% se refiram ao mesmo trecho.
+  const samples = valid
+    .filter(r => r.contiguous && (r.batteryAfter - r.batteryBefore) > 0)
+    .map(r => r.kwh / ((r.batteryAfter - r.batteryBefore) / 100));
+  const capacity = samples.length
+    ? samples.reduce((a,b)=>a+b,0) / samples.length
+    : null;
+  $('batteryCapacity').textContent = capacity === null
+    ? '-- kWh' : num(capacity, 1)+' kWh';
+
+  const history = $('history');
+  history.replaceChildren();
+
+  if (!list.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = 'Nenhum carregamento registrado ainda.';
+    history.appendChild(empty);
+    return;
+  }
+
+  // Mais recente primeiro na exibição
+  [...list].reverse().forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'item';
+
+    const top = document.createElement('div');
+    top.className = 'itemtop';
+
+    const title = document.createElement('h3');
+    title.textContent = dateLabel(r.date);
+
+    const costLabel = document.createElement('strong');
+    costLabel.textContent = r.kwh === null || r.error
+      ? (r.error ? 'Verificar medidor' : 'Leitura inicial')
+      : money(r.kwh * tariff);
+
+    top.append(title, costLabel);
+
+    const details = document.createElement('p');
+    details.textContent =
+      'Bateria: '+r.batteryBefore+'% → '+r.batteryAfter+
+      '% ('+(r.batteryAfter-r.batteryBefore)+' pontos)';
+
+    const meter = document.createElement('p');
+    meter.textContent = 'Medidor: '+num(r.meter, 3)+' kWh';
+
+    const energy = document.createElement('p');
+    if (r.error) {
+      energy.textContent =
+        '⚠️ A leitura é menor que a última leitura válida. Confira os registros.';
+    } else if (r.kwh === null) {
+      energy.textContent = 'Consumo: indisponível (leitura de referência).';
+    } else {
+      energy.textContent = 'Consumo medido: '+num(r.kwh, 3)+' kWh';
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+
+    const edit = document.createElement('button');
+    edit.className = 'secondary';
+    edit.textContent = 'Editar';
+    edit.addEventListener('click',()=>editRecord(r.id));
+
+    const del = document.createElement('button');
+    del.className = 'danger';
+    del.textContent = 'Excluir';
+    del.addEventListener('click',()=>deleteRecord(r.id));
+
+    actions.append(edit, del);
+    div.append(top, details, meter, energy, actions);
+    history.appendChild(div);
+  });
+}
+
+function setDateNow() {
+  const d = new Date();
+  const local = new Date(d.getTime()-d.getTimezoneOffset()*60000);
+  $('date').value = local.toISOString().slice(0,16);
+}
+
+function resetForm() {
+  $('chargeForm').reset();
+  $('editId').value = '';
+  $('formTitle').textContent = '➕ Registrar carregamento';
+  $('saveButton').textContent = 'Salvar carregamento';
+  $('cancelEdit').style.display = 'none';
+  setDateNow();
+}
+
+$('chargeForm').addEventListener('submit', e => {
+  e.preventDefault();
+
+  const date = $('date').value;
+  const before = Number($('batteryBefore').value);
+  const after  = Number($('batteryAfter').value);
+  const meter  = Number($('meter').value);
+  const editId = $('editId').value;
+
+  if (!date ||
+      !Number.isFinite(meter) || meter < 0 ||
+      !Number.isFinite(before) || before < 0 || before > 100 ||
+      !Number.isFinite(after)  || after  < 0 || after  > 100) {
+    alert('Confira a data, o medidor e as porcentagens.');
+    return;
+  }
+
+  if (after < before) {
+    if (!confirm('A bateria final é menor que a inicial. Deseja salvar assim?')) {
+      return;
+    }
+  }
+
+  const record = {
+    id: editId || (Date.now().toString()+
+      Math.random().toString(16).slice(2)),
+    date, batteryBefore:before, batteryAfter:after, meter
+  };
+
+  const others = records.filter(r=>r.id !== record.id);
+
+  if (!editId && others.some(r => r.date === date)) {
+    if (!confirm('Já existe um registro neste horário. Deseja salvar mesmo assim?')) {
+      return;
+    }
+  }
+
+  const candidate = [...others, record]
+    .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+
+  const index = candidate.findIndex(r=>r.id===record.id);
+
+  if (index === 0 && initialMeter !== null && meter < initialMeter) {
+    alert('A leitura é menor que a leitura inicial configurada. ' +
+      'Confira a data e o valor do medidor.');
+    return;
+  }
+  if (index > 0 && meter < Number(candidate[index-1].meter)) {
+    alert('A leitura atual é menor que a anterior. Confira a data e o valor do medidor.');
+    return;
+  }
+  if (index >= 0 && index < candidate.length-1 &&
+      Number(candidate[index+1].meter) < meter) {
+    alert('Esta leitura é maior que a leitura seguinte. Confira a data e o valor do medidor.');
+    return;
+  }
+
+  records = candidate;
+  persist();
+  resetForm();
+  render();
+});
+
+function editRecord(id) {
+  const r = records.find(x=>x.id===id);
+  if (!r) return;
+  $('editId').value = r.id;
+  $('date').value = r.date;
+  $('batteryBefore').value = r.batteryBefore;
+  $('batteryAfter').value = r.batteryAfter;
+  $('meter').value = r.meter;
+  $('formTitle').textContent = '✏️ Editar carregamento';
+  $('saveButton').textContent = 'Salvar alterações';
+  $('cancelEdit').style.display = 'block';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function deleteRecord(id) {
+  if (!confirm('Deseja excluir este carregamento?')) return;
+  records = records.filter(r=>r.id!==id);
+  persist();
+  if ($('editId').value===id) resetForm();
+  render();
+}
+
+$('cancelEdit').addEventListener('click',resetForm);
+
+$('tariff').addEventListener('change',()=>{
+  const value = Number($('tariff').value);
+  if (!Number.isFinite(value) || value < 0) {
+    alert('Informe uma tarifa válida.');
+    $('tariff').value = tariff;
+    return;
+  }
+  tariff = value;
+  persist();
+  render();
+});
+
+$('initialMeter').addEventListener('change',()=>{
+  const raw = $('initialMeter').value.trim();
+  if (raw === '') {
+    initialMeter = null;
+  } else {
+    const v = Number(raw);
+    if (!Number.isFinite(v) || v < 0) {
+      alert('Informe uma leitura inicial válida.');
+      $('initialMeter').value =
+        initialMeter === null ? '' : String(initialMeter);
+      return;
+    }
+    initialMeter = v;
+  }
+  persist();
+  render();
+});
+
+$('exportBtn').addEventListener('click',()=>{
+  const list = calculations();
+  if (!list.length) {
+    alert('Não há registros para exportar.');
+    return;
+  }
+
+  const rows = [
+    ['Data','Bateria inicial (%)','Bateria final (%)',
+     'Leitura medidor (kWh)','Consumo medido (kWh)',
+     'Tarifa (R$/kWh)','Custo estimado (R$)']
+  ];
+
+  list.forEach(r=>rows.push([
+    r.date, r.batteryBefore, r.batteryAfter, r.meter,
+    r.kwh===null || r.error ? '' : r.kwh.toFixed(3),
+    tariff.toFixed(3),
+    r.kwh===null || r.error ? '' : (r.kwh*tariff).toFixed(2)
+  ]));
+
+  const csv = '\uFEFF'+rows.map(row=>row.map(v=>
+    '"'+String(v).replace(/"/g,'""')+'"'
+  ).join(';')).join('\r\n');
+
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'historico_recarga_ev.csv';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 1000);
+});
+
+$('clearBtn').addEventListener('click',()=>{
+  if (!confirm('Apagar TODO o histórico de carregamentos? Exporte uma cópia antes, se precisar.')) return;
+  records = [];
+  persist();
+  resetForm();
+  render();
+});
+
+// Mantém abas abertas em sincronia quando outra altera os dados.
+window.addEventListener('storage', (e) => {
+  if (e.key && ![STORAGE, TARIFF_KEY, INITIAL_METER_KEY].includes(e.key)) return;
+  loadFromStorage();
+  $('tariff').value = tariff;
+  $('initialMeter').value =
+    initialMeter === null ? '' : String(initialMeter);
+  render();
+});
+
+loadFromStorage();
+$('tariff').value = tariff;
+$('initialMeter').value =
+  initialMeter === null ? '' : String(initialMeter);
+setDateNow();
+render();
+</script>
+</body>
+</html>
