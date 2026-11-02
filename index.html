@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#10251e">
 <title>Gestão de Recarga EV</title>
-<!-- Inclusão do Chart.js para os gráficos -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Biblioteca Chart.js oficial e estável -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
 :root {
   --bg:#f1f5f2; --card:#fff; --green:#137c53;
@@ -146,14 +146,19 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:8px 0 25px}
       <button class="toggle-btn" id="chartsToggle">▲</button>
     </div>
     <div class="card-body" id="chartsBody">
-      <label>Consumo por Recarga (kWh) e Custo (R$)</label>
-      <div class="chart-container">
-        <canvas id="consumptionChart"></canvas>
+      <div id="noChartNotice" class="empty" style="display:none">
+        Registre pelo menos duas leituras válidas para exibir os gráficos de consumo.
       </div>
+      <div id="chartsWrapper">
+        <label>Consumo por Recarga (kWh) e Custo (R$)</label>
+        <div class="chart-container">
+          <canvas id="consumptionChart"></canvas>
+        </div>
 
-      <label>Evolução do Nível da Bateria (%)</label>
-      <div class="chart-container">
-        <canvas id="batteryChart"></canvas>
+        <label>Evolução do Nível da Bateria (%)</label>
+        <div class="chart-container">
+          <canvas id="batteryChart"></canvas>
+        </div>
       </div>
     </div>
   </section>
@@ -233,7 +238,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:8px 0 25px}
     </div>
     <div class="card-body" id="historyBody">
       <p class="note">
-        O consumo de cada leitura é calculated pela diferença em
+        O consumo de cada leitura é calculado pela diferença em
         relação à última leitura válida. Se você informar uma
         leitura inicial nas configurações, o primeiro carregamento
         também terá consumo medido. Registre as leituras do mesmo
@@ -289,6 +294,10 @@ function toggleSection(bodyId, toggleId) {
   try {
     localStorage.setItem(FOLD_KEY, JSON.stringify(folds));
   } catch (e) {}
+
+  if (bodyId === 'chartsBody' && !isHidden) {
+    setTimeout(render, 50);
+  }
 }
 
 function loadFolds() {
@@ -419,6 +428,17 @@ function calculations() {
 }
 
 function updateCharts(validList) {
+  if (typeof Chart === 'undefined') return;
+
+  if (!validList || validList.length === 0) {
+    $('noChartNotice').style.display = 'block';
+    $('chartsWrapper').style.display = 'none';
+    return;
+  }
+
+  $('noChartNotice').style.display = 'none';
+  $('chartsWrapper').style.display = 'block';
+
   const labels = validList.map(r => {
     const d = new Date(r.date);
     return isNaN(d) ? r.date : `${d.getDate()}/${d.getMonth()+1} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -429,7 +449,6 @@ function updateCharts(validList) {
   const batteryBeforeData = validList.map(r => r.batteryBefore);
   const batteryAfterData = validList.map(r => r.batteryAfter);
 
-  // Destruir instâncias antigas para re-renderizar
   if (consumptionChart) consumptionChart.destroy();
   if (batteryChart) batteryChart.destroy();
 
@@ -515,7 +534,6 @@ function render() {
   $('lastBattery').textContent = list.length
     ? list[list.length-1].batteryAfter+'%' : '--%';
 
-  // Cálculo das Médias Diária e Mensal
   if (valid.length > 0) {
     const firstDate = new Date(valid[0].date);
     const lastDate = new Date(valid[valid.length - 1].date);
